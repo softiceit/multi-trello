@@ -5,6 +5,7 @@
       var allLists = [];
       var allUsers = [];
       var myId = false;
+	  var boards = [];
       
       // clear all the cards and repull them
       $('#listname').change(function(){
@@ -25,7 +26,17 @@
             return board.lists[i].id;
           }
         }
-        return false;
+		//add in the lists that were not found
+		for (var i = 0; i < l; i++) {
+			var opt = $('#listname option').filter(function (item) {
+				return $($('#listname option')[item]).text() == board.lists[i].name;
+			})[0];
+			if (!opt) {
+				var option = new Option(board.lists[i].name, board.lists[i].name);
+				$('#listname').append($(option));
+			}
+		}
+        return 1;
       }
 
       var getUserId = function(){
@@ -47,10 +58,13 @@
               // only show open ones
               // make sure it has an 'in progress list'
               if (!item.closed){
+				boards.push(item.id);
                 var listId = getListId(item);
                 console.log('board',listId,item);
                 if (listId){
-                  allLists.push(listId);
+					if (listId != 1) {
+						allLists.push(listId);
+					}
                   var template = $('#boardTemplate').html();
                   Mustache.parse(template);   // optional, speeds up future uses
                   var rendered = Mustache.render(template, { boardurl: item.url, board: item, listId: listId, listStatus: 'In Progress' });
@@ -146,42 +160,50 @@
       }
 
       var getAllCards = function(){
-          var userId = getUserId();
-          console.log('get all cards for ' + userId);
-          var params = { fields:'name,closed,idList,idBoard,url,idMembers,desc,idLabels' };
-          Trello.get("members/"+userId+"/cards", params, function(items) {
-            var $list, $li, $a;
-            $.each(items, function(ix, item) {
-              // only show open ones in in progress lists
-              if (!item.closed){
-                if (allLists.indexOf(item.idList) > -1){
-                  // in progress!!!!!
-                  //console.log(item);
-                  var description = item.desc;
-                  $list = $('#list_' + item.idList);
-                  if ($list.length > 0){
-                    var template = $('#itemTemplate').html();
-                    Mustache.parse(template);   // optional, speeds up future uses
-                    var rendered = Mustache.render(template, { 
-                        item: item,
-                        id: getIdFromCard(item),
-                        name: getNameFromCard(item),
-                        points: getPointsFromCard(item),
-                        person: getPersonFromCard(item), 
-                        project: getProjectFromCard(item)
+		  //get all the boards for the user, and then iteratively get all cards for those boards, irrespective of user
+		  var userId = getUserId();
+		  console.log(boards);
+		  for (var i = 0; i < boards.length; i++)
+		  {
+			  console.log('get all cards for board: ' + boards[i]);
+			  var params = { fields:'name,closed,idList,idBoard,url,idMembers,desc,idLabels' };
+			  var url = "boards/" + boards[i] + "/cards/open";
+			  Trello.get(url, params, function(items) {
+				  console.log(items);
+				  return;
+				var $list, $li, $a;
+				$.each(items, function(ix, item) {
+				  // only show open ones in in progress lists
+				  if (!item.closed){
+					if (allLists.indexOf(item.idList) > -1 || 1 == 1){
+					  // in progress!!!!!
+					  var description = item.desc;
+					  console.log(item.idList);
+					  $list = $('#list_' + item.idList);
+					  if ($list.length > 0){
+						var template = $('#itemTemplate').html();
+						Mustache.parse(template);   // optional, speeds up future uses
+						var rendered = Mustache.render(template, { 
+							item: item,
+							id: getIdFromCard(item),
+							name: getNameFromCard(item),
+							points: getPointsFromCard(item),
+							person: getPersonFromCard(item), 
+							project: getProjectFromCard(item)
 
-                    });
-                    $list.append(rendered);
-                    //console.log('card',item);
-                  }
-                }
-              }
-            });
-            // done with loop
-            $('.panel-body').html('');
-            showTotalPoints();
-            $('.sync').on('click', onSync);
-          });
+						});
+						$list.append(rendered);
+						console.log('card',item);
+					  }
+					}
+				  }
+				});
+			  });
+		  }
+		  // done with loop
+		  $('.panel-body').html('');
+		  //showTotalPoints();
+		  $('.sync').on('click', onSync);
       }
 
       var showTotalPoints = function(){
@@ -220,7 +242,8 @@
       }
 
       
-      var onAuthorize = function() {
+      var onAuthorize = function(abc) {
+        console.log(abc);
         updateLoggedIn();
         $("#output").empty();
         
@@ -253,10 +276,14 @@
  
       $("#connectLink").click(function(){
         Trello.authorize({
-          name: 'Sharpdot Trello App',
+          name: 'SOFTICE Trello Consolidator',
           type: "popup",
           success: onAuthorize,
-          scope: { write: true, read: true }
+          scope: { write: true, read: true },
+		  expiration: 'never',
+		  error: function(er) {
+			  console.log(er);
+		  }
         })
       });
         
